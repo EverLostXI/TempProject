@@ -4,6 +4,7 @@
 #include "ui_mainwindow.h"
 #include "AddFriendDialog.h"
 #include <QListWidgetItem> // 如果槽函数参数用到了，需要包含头文件
+#include "networkmanager.h"
 
 // ... 其他代码 ...
 
@@ -14,6 +15,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     // ...
+    connect(&NetworkManager::instance(), &NetworkManager::autoAcceptFriendRequest, this, &MainWindow::onAutoAcceptFriendRequest);
     // --- 添加初始的假数据 ---
     m_friends[1001] = "张三";
     m_friends[1002] = "李四";
@@ -116,4 +118,28 @@ void MainWindow::updateConversationList()
         QString itemText = QString("群聊: %1 (%2)").arg(it.value()).arg(it.key());
         ui->conversationListWidget->addItem(itemText);
     }
+}
+
+void MainWindow::onAutoAcceptFriendRequest(uint8_t requesterId)
+{
+    qDebug() << "[MainWindow] Auto-accepting and adding friend:" << requesterId;
+
+    // 1. 检查是否已经是好友了，防止重复添加
+    if (m_friends.contains(requesterId)) {
+        qDebug() << "[MainWindow] Friend" << requesterId << "already exists.";
+        // 即使已经是好友，也应该回复一个成功的消息，让对方能完成添加流程
+    } else {
+        // 2. 添加到你的好友数据中 (m_friends)
+        // 我们暂时不知道新好友的名字，所以先用ID作为临时名字
+        QString temporaryName = QString("用户 %1").arg(requesterId);
+        m_friends.insert(requesterId, temporaryName);
+
+        // 3. 调用你已有的函数刷新UI
+        updateConversationList();
+    }
+
+    // 4. [关键] 无论对方是否已经是好友，都回复服务器，告诉它你已经“同意”了
+    // 这样可以确保发起请求的A端能够收到成功的响应
+    uint8_t selfId = NetworkManager::selfId(); // [注意] 这里需要获取当前用户的真实ID
+    NetworkManager::instance().sendAddFriendResponse(requesterId, selfId, true);
 }

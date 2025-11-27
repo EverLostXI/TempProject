@@ -182,6 +182,21 @@ void NetworkManager::onReadyRead()
                 break;
             }
 
+            case MsgType::AddFriendReq: // [新增] 处理收到的好友请求
+            {
+                // 假设 selfId() 能获取当前登录用户的ID
+                if (receivedPacket.getrecvid() == selfId()) {
+                    // 这是别人发给我的好友请求
+                    uint8_t requesterId = receivedPacket.getsendid();
+                    qDebug() << "[NetworkManager] Received and auto-accepting friend request from ID:" << requesterId;
+
+                    // 发射一个新信号，通知 MainWindow 自动处理
+                    emit autoAcceptFriendRequest(requesterId);
+                }
+                // 如果 recvid 不是自己，那就忽略这个包（理论上不应该发生）
+                break;
+            }
+
             default:
                 qDebug() << "Received unknown message type:" << static_cast<int>(receivedPacket.type());
                 break;
@@ -224,4 +239,23 @@ void NetworkManager::onRegistrationRequested(const QString& username, const QStr
     } else {
         emit registrationResult(false, "注册失败：网络发送异常。");
     }
+}
+
+// [新增] sendAddFriendResponse() 函数的实现
+void NetworkManager::sendAddFriendResponse(uint8_t originalRequesterId, uint8_t selfId, bool accepted)
+{
+    // 构造 AddFriendRe 包
+    // 注意：这里的 sendid 是最初发起请求的人，recvid 是你自己
+    Packet responsePacket = Packet::makeAddFriendRe(originalRequesterId, selfId, accepted);
+    responsePacket.sendTo(m_socket);
+    qDebug() << "[NetworkManager] Sent auto-accepted friend response for requester" << originalRequesterId;
+}
+
+
+// [新增] selfId() 函数的实现
+uint8_t NetworkManager::selfId()
+{
+    // 目前硬编码返回用户ID为 1
+    // TODO: 将来这里需要替换为从登录信息中获取的真实ID
+    return 1;
 }
