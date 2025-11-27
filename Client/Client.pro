@@ -16,21 +16,30 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    AddFriendDialog.cpp \
+    CreateGroupDialog.cpp \
     LoginDialog.cpp \
+    MainWindow.cpp \
     NetworkManager.cpp \
     RegisterDialog.cpp \
     main.cpp \
     widget.cpp
 
 HEADERS += \
+    AddFriendDialog.h \
+    CreateGroupDialog.h \
     LoginDialog.h \
+    MainWindow.h \
     NetworkManager.h \
     RegisterDialog.h \
     chatMsg.hpp \
     widget.h
 
 FORMS += \
+    AddFriendDialog.ui \
+    CreateGroupDialog.ui \
     LoginDialog.ui \
+    MainWindow.ui \
     RegisterDialog.ui \
     widget.ui
 
