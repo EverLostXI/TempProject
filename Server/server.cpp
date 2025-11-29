@@ -30,6 +30,8 @@ const int PORT = 8888;
 // 设置listen连接队列长度
 const int BACKLOG = 5;
 
+// 启用调试模式（是否往日志中记录DEBUG和TRACE级别的信息）（最好在运行后输入，这样不用每次更换前都重新编译（虽然也花不了几个时间））
+bool g_debugMode = true;
 
 // 为Packet添加Windows socket支持的补充函数
 // chatmsg中recv和send是用的qt封装的函数，由于server不依赖qt，只能重新写一个winsock版本的
@@ -105,7 +107,7 @@ std::string TimeStamp() {
 // 初始化服务器日志
 std::ofstream logFile; // 初始化文件句柄
 
-std::string FileNameGen() { // 将日志以当前日期命名,逻辑与获取时间戳函数一致
+std::string FileNameGen() { // 将日志以当前日期命名，但是不包含具体时间，逻辑与获取时间戳函数一致
     time_t currentTime = time(nullptr);
     tm* localTime = localtime(&currentTime);
     std::stringstream fname;
@@ -136,6 +138,15 @@ std::string LevelToString(LogLevel level) { // 将日志级别转为字符串
     }
 }
 
+// 增加内联辅助函数用于判断调试模式是否开启，如果未开启，不会打印DEBUG和TRACE级别的目录到日志中
+inline void DebugWriteLog(LogLevel level, const std::string message) {
+    if (level == LogLevel::DEBUG_LEVEL || level == LogLevel::TRACE_LEVEL) {
+        if (!g_debugMode) return;
+    }
+    WriteLog(level, message);
+}
+
+// 日志写入函数
 void WriteLog(LogLevel level, const std::string& message) { //包含两个参数：重要级，消息内容
     if (logFile.is_open()) {
         logFile << TimeStamp() << "[" << LevelToString(level) << "]" << message << std::endl;
@@ -171,13 +182,13 @@ bool InitializeWinSock() {
         WriteLog(LogLevel::FATAL_LEVEL, errormessage);
         return false;
     }
-    WriteLog(LogLevel::DEBUG_LEVEL, "WinSock 2.2 初始化成功");
+    DebugWriteLog(LogLevel::DEBUG_LEVEL, "WinSock 2.2 初始化成功");
     return true;
 }
 
 void CleanupWinSock() {
     WSACleanup();
-    WriteLog(LogLevel::DEBUG_LEVEL, "WinSock 清理完成");
+    DebugWriteLog(LogLevel::DEBUG_LEVEL, "WinSock 清理完成");
 }
 
 
@@ -282,7 +293,7 @@ bool AuthenticateCredential(uint8_t userId, const std::string &inputPassword) {
 void HandleClient(ClientSession* sessionPtr) { // 这个会话指针（sessionPtr)作为一个客户端在内存中的唯一代表
     SOCKET clientSocket = sessionPtr->socket_fd;
     std::string clientInfo = sessionPtr->client_ip + ":" + std::to_string(sessionPtr->client_port); // 读取这个连接的ip和端口
-    WriteLog(LogLevel::DEBUG_LEVEL, "客户端处理线程启动: " + clientInfo);
+    DebugWriteLog(LogLevel::DEBUG_LEVEL, "客户端处理线程启动: " + clientInfo);
     
     // 消息接收循环，持续接收并处理客户端消息
     while (true) {
@@ -370,7 +381,7 @@ void HandleClient(ClientSession* sessionPtr) { // 这个会话指针（sessionPt
                     ClientSession* targetSession = g_userSessions[receiverId];
                     // 直接转发原始数据包
                     SendPacket(targetSession->socket_fd, receivedPacket);
-                    WriteLog(LogLevel::DEBUG_LEVEL, "消息已转发给用户ID: " + std::to_string(receiverId));
+                    DebugWriteLog(LogLevel::DEBUG_LEVEL, "消息已转发给用户ID: " + std::to_string(receiverId));
                 } else {
                     // TODO：如果用户不在线，由服务器暂存消息，等到客户端上线的时候再发送
                     // 应该为每一个用户建立一个暂存消息库，每次用户的在线状态变为在线的时候就把这些暂存消息一股脑发给这个用户
@@ -416,7 +427,7 @@ void HandleClient(ClientSession* sessionPtr) { // 这个会话指针（sessionPt
                     // 转发好友请求给目标用户
                     ClientSession* targetSession = g_userSessions[targetId];
                     SendPacket(targetSession->socket_fd, receivedPacket);
-                    WriteLog(LogLevel::DEBUG_LEVEL, "好友请求已转发给用户ID: " + std::to_string(targetId));
+                    DebugWriteLog(LogLevel::DEBUG_LEVEL, "好友请求已转发给用户ID: " + std::to_string(targetId));
                 } else {
                     // 目标用户不在线，直接返回失败
                     Packet response = Packet::makeAddFriendRe(requesterId, targetId, false);
@@ -439,7 +450,7 @@ void HandleClient(ClientSession* sessionPtr) { // 这个会话指针（sessionPt
                 if (g_userSessions.count(originalRequesterId)) {
                     ClientSession* requesterSession = g_userSessions[originalRequesterId];
                     SendPacket(requesterSession->socket_fd, receivedPacket);
-                    WriteLog(LogLevel::DEBUG_LEVEL, "好友响应已转发给用户ID: " + std::to_string(originalRequesterId));
+                    DebugWriteLog(LogLevel::DEBUG_LEVEL, "好友响应已转发给用户ID: " + std::to_string(originalRequesterId));
                 }
                 break;
             }
@@ -456,7 +467,7 @@ void HandleClient(ClientSession* sessionPtr) { // 这个会话指针（sessionPt
     sessionPtr->online(false); // 标记为离线
     closesocket(clientSocket);
     // 注意：不再 delete sessionPtr，保留会话对象供下次重连使用
-    WriteLog(LogLevel::DEBUG_LEVEL, "会话对象已标记为离线，保留以供重连: " + sessionPtr->client_ip);
+    DebugWriteLog(LogLevel::DEBUG_LEVEL, "会话对象已标记为离线，保留以供重连: " + sessionPtr->client_ip);
 }
 // 注：消息封装和解包功能已由 chatMsg.hpp 中的 Packet 类实现
 // Packet 类提供了更完善的消息封装、网络字节序转换、以及接收功能
@@ -465,6 +476,12 @@ void HandleClient(ClientSession* sessionPtr) { // 这个会话指针（sessionPt
 int main() {
     // 初始化日志文件
     InitializeLogFile();
+
+    // 标记是否启用debug模式
+    if (g_debugMode) {
+        WriteLog(LogLevel::INFO_LEVEL, "===debug模式已启用===")
+    }
+    
 
     // 初始化WinSock
     if (!InitializeWinSock()) {
@@ -553,19 +570,19 @@ int main() {
             // 重用已有的会话对象
             clientSession = g_ipToSession[clientIP];
             clientSession->updateSocket(clientSocket); // 更新socket和在线状态
-            WriteLog(LogLevel::INFO_LEVEL, "重用已有会话对象: " + clientIP);
+            DebugWriteLog(LogLevel::DEBUG_LEVEL, "重用已有会话对象: " + clientIP);
         } else {
             // 首次连接，创建新的会话对象
             clientSession = new ClientSession(clientSocket, clientIP, clientPort);
             g_ipToSession[clientIP] = clientSession; // 保存到映射中
-            WriteLog(LogLevel::INFO_LEVEL, "创建新会话对象: " + clientIP);
+            DebugWriteLog(LogLevel::DEBUG_LEVEL, "创建新会话对象: " + clientIP);
         }
         
         // 为这个客户端创建新线程进行处理
         std::thread clientHandlerThread(HandleClient, clientSession);
         clientHandlerThread.detach(); // 分离线程，使其独立运行，主线程不等待
         
-        WriteLog(LogLevel::DEBUG_LEVEL, "已为客户端分配独立处理线程");
+        DebugWriteLog(LogLevel::DEBUG_LEVEL, "已为客户端分配独立处理线程");
     }
     
     // 程序正常情况下不会执行到这里（除非手动break跳出循环）
