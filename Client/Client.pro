@@ -23,7 +23,6 @@ SOURCES += \
     NetworkManager.cpp \
     RegisterDialog.cpp \
     main.cpp \
-    widget.cpp
 
 HEADERS += \
     AddFriendDialog.h \
@@ -33,7 +32,6 @@ HEADERS += \
     NetworkManager.h \
     RegisterDialog.h \
     chatMsg.hpp \
-    widget.h
 
 FORMS += \
     AddFriendDialog.ui \
@@ -41,7 +39,6 @@ FORMS += \
     LoginDialog.ui \
     MainWindow.ui \
     RegisterDialog.ui \
-    widget.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

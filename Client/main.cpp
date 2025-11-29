@@ -1,4 +1,3 @@
-#include "widget.h"
 #include "logindialog.h"
 #include "registerdialog.h"
 #include "networkmanager.h"
